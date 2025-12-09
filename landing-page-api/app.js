@@ -108,7 +108,7 @@ app.use(async (req, res, next) => {
     // Ex real: publicador.useprospera.com.br (4 partes) -> subdomain=publicador
 
     // Log para debug
-    // console.log(`[Middleware] Host: ${host}, Parts: ${parts.length}`);
+    console.log(`[Middleware] Host: ${host}, Parts: ${parts.length}`);
 
     if (parts.length < 3) return next();
 
