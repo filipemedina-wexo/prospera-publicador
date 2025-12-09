@@ -6,7 +6,9 @@ export const publishLandingPage = async (subdomain: string, file: File): Promise
   formData.append('file', file);
 
   try {
-    const response = await fetch('https://api.prosperapages.com.br/publish', {
+    // Em produção, a URL deve vir da variável de ambiente VITE_API_URL
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    const response = await fetch(`${apiUrl}/publish`, {
       method: 'POST',
       body: formData,
     });
