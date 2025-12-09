@@ -8,6 +8,15 @@ const VALID_USER = {
   password: import.meta.env.VITE_AUTH_PASSWORD
 };
 
+// Debug para produção
+console.log('Auth Config Loaded:', {
+  hasEmail: !!VALID_USER.email,
+  emailLength: VALID_USER.email?.length,
+  hasPassword: !!VALID_USER.password,
+  passwordLength: VALID_USER.password?.length,
+  envState: import.meta.env.MODE
+});
+
 export const login = (email: string, password: string): boolean => {
   if (email === VALID_USER.email && password === VALID_USER.password) {
     localStorage.setItem(STORAGE_KEY, 'true');
