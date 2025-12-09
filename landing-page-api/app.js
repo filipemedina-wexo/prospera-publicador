@@ -51,11 +51,25 @@ app.post('/publish', upload.single('file'), async (req, res) => {
         await fs.emptyDir(destDir); // Cria se não existir, limpa se existir
 
         // 3. Extração do ZIP
+        console.log(`[Publish] Iniciando extração do ZIP para: ${destDir}`);
         const zipStream = fs.createReadStream(file.path).pipe(unzipper.Extract({ path: destDir }));
 
         await new Promise((resolve, reject) => {
-            zipStream.on('close', resolve);
-            zipStream.on('error', reject);
+            zipStream.on('close', () => {
+                console.log(`[Publish] Extração concluída com sucesso.`);
+                // Lista arquivos para confirmar
+                try {
+                    const files = fs.readdirSync(destDir);
+                    console.log(`[Publish] Arquivos extraídos em ${destDir}:`, files);
+                } catch (e) {
+                    console.error(`[Publish] Erro ao listar arquivos extraídos:`, e);
+                }
+                resolve();
+            });
+            zipStream.on('error', (err) => {
+                console.error(`[Publish] Erro na extração:`, err);
+                reject(err);
+            });
         });
 
         // 4. Limpeza do arquivo temporário
@@ -89,16 +103,31 @@ app.use(async (req, res, next) => {
     const parts = host.split('.');
 
     // Ignora se for o domínio raiz ou IP
+    // Ex: localhost:3000 (2 partes) ou 127.0.0.1 (4 partes numéricas - simplificação)
+    // Ex real: teste.useprospera.com.br (4 partes) -> subdomain=teste
+    // Ex real: publicador.useprospera.com.br (4 partes) -> subdomain=publicador
+
+    // Log para debug
+    // console.log(`[Middleware] Host: ${host}, Parts: ${parts.length}`);
+
     if (parts.length < 3) return next();
 
     const subdomain = parts[0];
+
+    // Lista negra de subdomínios (api, www, publicador, etc) se necessário
+    if (['www', 'api', 'publicador'].includes(subdomain)) return next();
+
     const siteDir = path.join(SITES_BASE, subdomain);
 
-    // Verifica se o diretório do site existe
-    if (await fs.pathExists(siteDir)) {
-        // Serve os arquivos estáticos desse diretório
+    const exists = await fs.pathExists(siteDir);
+    if (exists) {
+        console.log(`[Middleware] Servindo site para subdomínio: ${subdomain} em ${siteDir}`);
         express.static(siteDir)(req, res, next);
     } else {
+        // Se é um subdomínio mas não tem pasta, loga warning (pode ser 404 real ou erro de volume)
+        if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+            console.warn(`[Middleware] Subdomínio ${subdomain} acessado, mas pasta não encontrada em ${siteDir}`);
+        }
         next();
     }
 });
