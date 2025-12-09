@@ -4,8 +4,8 @@ const STORAGE_KEY = 'prospera_auth_session';
 // Em uma aplicação real, isso seria validado no backend via API.
 // Para este protótipo estático, validamos localmente conforme solicitado.
 const VALID_USER = {
-  email: 'filipe@useprospera.com.br',
-  password: 'R@fa@1307'
+  email: import.meta.env.VITE_AUTH_EMAIL,
+  password: import.meta.env.VITE_AUTH_PASSWORD
 };
 
 export const login = (email: string, password: string): boolean => {
