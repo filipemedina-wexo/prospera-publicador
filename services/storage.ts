@@ -10,6 +10,18 @@ export const getStoredLPs = (): PublishedLP[] => {
     console.error("Error reading from local storage", error);
     return [];
   }
+  console.error("Error saving to local storage", error);
+}
+};
+
+export const removeStoredLP = (subdomain: string): void => {
+  try {
+    const list = getStoredLPs();
+    const newList = list.filter(lp => lp.subdomain !== subdomain);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+  } catch (error) {
+    console.error("Error removing from local storage", error);
+  }
 };
 
 export const addStoredLP = (lp: PublishedLP): void => {
