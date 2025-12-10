@@ -41,5 +41,3 @@ export const deleteLandingPage = async (subdomain: string): Promise<{ success: b
     };
   }
 };
-  }
-};
