@@ -10,6 +10,7 @@ const app = express();
 // Usa porta 4002 para evitar conflitos conhecidos
 const PORT = process.env.PORT || 4000;
 const SITES_BASE = process.env.SITES_BASE || path.join(__dirname, 'sites');
+const REGISTRY_FILE = path.join(SITES_BASE, 'registry.json');
 
 // Configuração do Multer (armazenamento temporário)
 const upload = multer({
@@ -24,6 +25,60 @@ app.use(express.urlencoded({ extended: true }));
 
 // Garante que a pasta de sites existe
 fs.ensureDirSync(SITES_BASE);
+
+async function readRegistry() {
+    let registry = [];
+    try {
+        const stored = await fs.readJson(REGISTRY_FILE);
+        registry = Array.isArray(stored) ? stored : [];
+    } catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.error('[Registry] Erro ao ler registro:', error);
+        }
+    }
+
+    // Recupera sites publicados antes da existência do registry.json.
+    const known = new Set(registry.map(item => item.subdomain));
+    const entries = await fs.readdir(SITES_BASE, { withFileTypes: true });
+    let changed = false;
+    for (const entry of entries) {
+        if (!entry.isDirectory() || !/^[a-z0-9-]+$/.test(entry.name) || known.has(entry.name)) continue;
+        const indexPath = path.join(SITES_BASE, entry.name, 'index.html');
+        if (!await fs.pathExists(indexPath)) continue;
+        const stats = await fs.stat(indexPath);
+        registry.push({
+            subdomain: entry.name,
+            url: `https://${entry.name}.useprospera.com.br`,
+            createdAt: stats.birthtimeMs || stats.mtimeMs,
+            updatedAt: stats.mtimeMs
+        });
+        changed = true;
+    }
+    if (changed) await writeRegistry(registry);
+    return registry;
+}
+
+async function writeRegistry(registry) {
+    await fs.outputJson(REGISTRY_FILE, registry, { spaces: 2 });
+}
+
+async function upsertRegistryEntry(entry) {
+    const registry = await readRegistry();
+    const index = registry.findIndex(item => item.subdomain === entry.subdomain);
+    if (index >= 0) {
+        registry[index] = { ...registry[index], ...entry, updatedAt: Date.now() };
+    } else {
+        registry.unshift(entry);
+    }
+    await writeRegistry(registry);
+    return registry;
+}
+
+async function removeRegistryEntry(subdomain) {
+    const registry = await readRegistry();
+    const nextRegistry = registry.filter(item => item.subdomain !== subdomain);
+    await writeRegistry(nextRegistry);
+}
 
 const https = require('https');
 
@@ -136,10 +191,7 @@ async function registerDomain(subdomain) {
     const apiKey = process.env.EASYPANEL_API_KEY;
     const apiUrl = process.env.EASYPANEL_API_URL || 'https://34eiwn.easypanel.host/api/trpc/domains.createDomain';
 
-    if (!apiKey) {
-        console.warn('[EasyPanel] API Key não configurada. Pulei o registro automático.');
-        return false;
-    }
+    if (!apiKey) throw new Error('EASYPANEL_API_KEY não configurada no backend.');
 
     const domainHost = `${subdomain}.useprospera.com.br`;
     const payload = {
@@ -176,12 +228,43 @@ async function registerDomain(subdomain) {
 
         await httpRequest(apiUrl, options, postData);
         console.log(`[EasyPanel] Domínio ${domainHost} registrado com sucesso!`);
-        return true;
+        return { created: true };
     } catch (err) {
         console.error(`[EasyPanel] Falha no registro:`, err);
-        return false;
+        throw new Error(`Não foi possível registrar o domínio no EasyPanel (${err.statusCode || 'sem resposta'}).`);
     }
 }
+
+async function ensureDomain(subdomain) {
+    const existingDomainId = await findDomainId(subdomain);
+    if (existingDomainId) return { created: false, id: existingDomainId };
+    return registerDomain(subdomain);
+}
+
+async function extractZipSafely(filePath, destDir) {
+    const directory = await unzipper.Open.file(filePath);
+    const resolvedDest = path.resolve(destDir);
+
+    for (const entry of directory.files) {
+        const target = path.resolve(resolvedDest, entry.path);
+        if (target !== resolvedDest && !target.startsWith(`${resolvedDest}${path.sep}`)) {
+            throw new Error(`ZIP inválido: caminho inseguro (${entry.path}).`);
+        }
+    }
+
+    await directory.extract({ path: destDir });
+}
+
+// Lista persistente das LPs publicadas no volume do servidor.
+app.get('/publish', async (req, res) => {
+    try {
+        const lps = await readRegistry();
+        res.json({ success: true, lps });
+    } catch (error) {
+        console.error('[Registry] Erro ao listar LPs:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar LPs.' });
+    }
+});
 
 // --- ENDPOINT DE PUBLICAÇÃO ---
 app.post('/publish', upload.single('file'), async (req, res) => {
@@ -203,38 +286,33 @@ app.post('/publish', upload.single('file'), async (req, res) => {
             });
         }
 
-        const destDir = path.join(SITES_BASE, subdomain);
-
-        // 2. Limpeza da pasta de destino (se existir)
-        await fs.emptyDir(destDir); // Cria se não existir, limpa se existir
-
-        // 3. Integração EasyPanel
-        try {
-            await registerDomain(subdomain);
-        } catch (e) {
-            console.error('Erro ao registrar domínio, mas prosseguindo com upload:', e);
+        if (!file.originalname.toLowerCase().endsWith('.zip')) {
+            await fs.remove(file.path);
+            return res.status(400).json({ success: false, message: 'Envie um arquivo .zip.' });
         }
 
-        // 4. Extração do ZIP
-        console.log(`[Publish] Iniciando extração do ZIP para: ${destDir}`);
-        const zipStream = fs.createReadStream(file.path).pipe(unzipper.Extract({ path: destDir }));
+        const destDir = path.join(SITES_BASE, subdomain);
 
-        await new Promise((resolve, reject) => {
-            zipStream.on('close', () => {
-                console.log(`[Publish] Extração concluída com sucesso.`);
-                // Lista arquivos para confirmar
-                try {
-                    const files = fs.readdirSync(destDir);
-                    console.log(`[Publish] Arquivos extraídos em ${destDir}:`, files);
-                } catch (e) {
-                    console.error(`[Publish] Erro ao listar arquivos extraídos:`, e);
-                }
-                resolve();
-            });
-            zipStream.on('error', (err) => {
-                console.error(`[Publish] Erro na extração:`, err);
-                reject(err);
-            });
+        // 2. Registra o domínio antes de publicar para não retornar falso sucesso.
+        await ensureDomain(subdomain);
+
+        // 3. Limpeza da pasta de destino (se existir)
+        await fs.emptyDir(destDir);
+
+        // 4. Extração segura do ZIP
+        console.log(`[Publish] Iniciando extração do ZIP para: ${destDir}`);
+        await extractZipSafely(file.path, destDir);
+        if (!await fs.pathExists(path.join(destDir, 'index.html'))) {
+            throw new Error('O ZIP precisa conter um index.html na raiz da Landing Page.');
+        }
+        console.log(`[Publish] Extração concluída com sucesso.`);
+
+        const now = Date.now();
+        await upsertRegistryEntry({
+            subdomain,
+            url: `https://${subdomain}.useprospera.com.br`,
+            createdAt: now,
+            updatedAt: now
         });
 
         // 4. Limpeza do arquivo temporário
@@ -254,7 +332,7 @@ app.post('/publish', upload.single('file'), async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: 'Erro interno ao processar a publicação.',
+            message: error.message || 'Erro interno ao processar a publicação.',
             error: error.message
         });
     }
@@ -332,6 +410,7 @@ app.delete('/publish/:subdomain', async (req, res) => {
             console.warn(`[Delete] Pasta não encontrada: ${siteDir}`);
         }
 
+        await removeRegistryEntry(subdomain);
         res.json({ success: true, message: 'Landing Page removida com sucesso.' });
 
     } catch (error) {

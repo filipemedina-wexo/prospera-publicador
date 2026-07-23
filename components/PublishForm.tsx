@@ -2,7 +2,6 @@ import React, { useState, ChangeEvent } from 'react';
 import { UploadCloud, CheckCircle2, AlertCircle, Loader2, Globe } from 'lucide-react';
 import { PublishStatus, PublishResponse } from '../types';
 import { publishLandingPage } from '../services/api';
-import { addStoredLP } from '../services/storage';
 
 const PublishForm: React.FC = () => {
   const [subdomain, setSubdomain] = useState<string>('');
@@ -33,14 +32,6 @@ const PublishForm: React.FC = () => {
     setResult(null);
 
     const response = await publishLandingPage(subdomain, file);
-
-    if (response.success && response.url) {
-      addStoredLP({
-        subdomain: subdomain,
-        url: response.url,
-        createdAt: Date.now()
-      });
-    }
 
     setResult(response);
     setStatus(response.success ? PublishStatus.SUCCESS : PublishStatus.ERROR);

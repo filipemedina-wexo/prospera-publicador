@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Globe, Calendar, Clock, ArrowRight, Plus, Trash2, Loader2 } from 'lucide-react';
+import { ExternalLink, Globe, Calendar, Clock, Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { PublishedLP } from '../types';
-import { getStoredLPs, removeStoredLP } from '../services/storage';
-import { deleteLandingPage } from '../services/api';
+import { deleteLandingPage, getLandingPages } from '../services/api';
 
 interface OverviewProps {
   onNavigateToPublish: () => void;
@@ -11,10 +10,22 @@ interface OverviewProps {
 const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
   const [lps, setLps] = useState<PublishedLP[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    setLps(getStoredLPs());
-  }, []);
+  const loadLPs = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setLps(await getLandingPages());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar as LPs.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadLPs(); }, []);
 
   const handleDelete = async (subdomain: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir ${subdomain}? Isso removerá o site do ar.`)) {
@@ -25,13 +36,26 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
     const result = await deleteLandingPage(subdomain);
 
     if (result.success) {
-      removeStoredLP(subdomain);
       setLps(prev => prev.filter(lp => lp.subdomain !== subdomain));
     } else {
       alert(`Erro: ${result.message}`);
     }
     setDeleting(null);
   };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-32 text-indigo-600"><Loader2 className="animate-spin mr-3" />Carregando suas Landing Pages...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto text-center bg-white rounded-3xl shadow-xl p-10">
+        <h1 className="text-2xl font-bold text-slate-800 mb-3">Não foi possível carregar as LPs</h1>
+        <p className="text-red-500 mb-6">{error}</p>
+        <button onClick={() => void loadLPs()} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold inline-flex items-center gap-2"><RefreshCw size={18} />Tentar novamente</button>
+      </div>
+    );
+  }
 
   const formatDate = (timestamp: number) => {
     // ... (rest of formatDate)
