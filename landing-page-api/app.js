@@ -15,7 +15,7 @@ const REGISTRY_FILE = path.join(SITES_BASE, 'registry.json');
 // Configuração do Multer (armazenamento temporário)
 const upload = multer({
     dest: 'temp_uploads/',
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
 });
 
 // Middleware
