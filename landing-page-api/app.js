@@ -419,6 +419,27 @@ app.delete('/publish/:subdomain', async (req, res) => {
     }
 });
 
+// Erros do Multer acontecem antes do handler de publicação. Sem este middleware,
+// o Express devolve uma página HTML de erro e o frontend não consegue exibir o motivo.
+app.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+            success: false,
+            message: 'O arquivo ZIP ultrapassa o limite de 100 MB.'
+        });
+    }
+
+    if (error) {
+        console.error('Erro no upload:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro ao receber o arquivo. Tente novamente.'
+        });
+    }
+
+    next();
+});
+
 // Inicia o servidor e trata erros
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
