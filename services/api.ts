@@ -36,10 +36,20 @@ export const publishLandingPage = async (subdomain: string, file: File): Promise
   }
 };
 
-export const deleteLandingPage = async (subdomain: string): Promise<{ success: boolean; message: string }> => {
+export const deleteLandingPage = async (subdomain: string): Promise<{
+  success: boolean;
+  message: string;
+  filesRemoved?: boolean;
+  domainRemoved?: boolean;
+}> => {
   try {
     const response = await fetch(`${API_URL}/publish/${encodeURIComponent(subdomain)}`, { method: 'DELETE' });
-    return await parseResponse<{ success: boolean; message: string }>(response);
+    return await parseResponse<{
+      success: boolean;
+      message: string;
+      filesRemoved?: boolean;
+      domainRemoved?: boolean;
+    }>(response);
   } catch (error) {
     console.error('API Error (Delete):', error);
     return { success: false, message: error instanceof Error ? error.message : 'Falha ao conectar com servidor.' };

@@ -62,6 +62,24 @@ npm start
 }
 ```
 
+### Excluir Landing Page
+
+**DELETE** `/publish/:subdomain`
+
+Remove a pasta da Landing Page no volume `SITES_BASE` da VPS, remove a entrada do
+registro e tenta excluir o domínio correspondente no EasyPanel. A resposta informa
+se os arquivos (`filesRemoved`) e o domínio (`domainRemoved`) foram removidos.
+
+**Exemplo de Resposta (Sucesso):**
+```json
+{
+  "success": true,
+  "filesRemoved": true,
+  "domainRemoved": true,
+  "message": "Landing Page e arquivos removidos com sucesso."
+}
+```
+
 ## Como funciona o servimento de sites
 
 A API possui um middleware que verifica o **Host Header** da requisição.

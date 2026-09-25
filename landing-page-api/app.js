@@ -80,6 +80,18 @@ async function removeRegistryEntry(subdomain) {
     await writeRegistry(nextRegistry);
 }
 
+function getSiteDirectory(subdomain) {
+    const sitesRoot = path.resolve(SITES_BASE);
+    const siteDir = path.resolve(sitesRoot, subdomain);
+
+    // Mantém a exclusão restrita ao volume configurado para os sites da VPS.
+    if (siteDir === sitesRoot || !siteDir.startsWith(`${sitesRoot}${path.sep}`)) {
+        throw new Error('Diretório de LP inválido.');
+    }
+
+    return siteDir;
+}
+
 const https = require('https');
 
 // Função auxiliar para fazer requisições HTTP (Promisified)
@@ -388,16 +400,17 @@ app.delete('/publish/:subdomain', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Subdomínio inválido.' });
     }
 
-    const siteDir = path.join(SITES_BASE, subdomain);
-
     try {
+        const siteDir = getSiteDirectory(subdomain);
+
         // 1. Tentar remover do EasyPanel (Sempre tentamos, mesmo se pasta não existir)
         console.log(`[Delete] Buscando ID do domínio para ${subdomain}...`);
         const domainId = await findDomainId(subdomain);
+        let domainRemoved = !domainId;
 
         if (domainId) {
             console.log(`[Delete] Removendo domínio ID ${domainId} do EasyPanel...`);
-            await deleteDomainInEasyPanel(domainId);
+            domainRemoved = await deleteDomainInEasyPanel(domainId);
         } else {
             console.warn(`[Delete] ID do domínio não encontrado no EasyPanel para ${subdomain}. Talvez já tenha sido removido.`);
         }
@@ -411,7 +424,14 @@ app.delete('/publish/:subdomain', async (req, res) => {
         }
 
         await removeRegistryEntry(subdomain);
-        res.json({ success: true, message: 'Landing Page removida com sucesso.' });
+        res.json({
+            success: true,
+            filesRemoved: true,
+            domainRemoved,
+            message: domainRemoved
+                ? 'Landing Page e arquivos removidos com sucesso.'
+                : 'Landing Page e arquivos removidos. O domínio não foi removido do EasyPanel.'
+        });
 
     } catch (error) {
         console.error(`[Delete] Erro ao remover ${subdomain}:`, error);
