@@ -154,7 +154,7 @@ async function findDomainId(subdomain) {
         // TRPC response structure: { result: { data: { json: [...] } } }
         // Ou direto se for transformer: { result: { data: [...] } }
         // Vamos tentar navegar com segurança
-        const domains = response?.result?.data?.json || response?.result?.data || [];
+        const domains = response?.result?.data?.json ?? response?.result?.data ?? response?.json ?? response;
 
         if (Array.isArray(domains)) {
             const found = domains.find(d => d.host === domainHost);
