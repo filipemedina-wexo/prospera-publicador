@@ -4,7 +4,7 @@ import { PublishedLP } from '../types';
 import { deleteLandingPage, getLandingPages } from '../services/api';
 
 interface OverviewProps {
-  onNavigateToPublish: () => void;
+  onNavigateToPublish: (subdomain?: string) => void;
 }
 
 const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
@@ -37,6 +37,7 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
 
     if (result.success) {
       setLps(prev => prev.filter(lp => lp.subdomain !== subdomain));
+      if (result.domainRemoved === false) alert(result.message);
     } else {
       alert(`Erro: ${result.message}`);
     }
@@ -89,7 +90,7 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
             Faça o upload do seu primeiro arquivo .zip e coloque sua página no ar em segundos.
           </p>
           <button
-            onClick={onNavigateToPublish}
+            onClick={() => onNavigateToPublish()}
             className="px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-bold shadow-lg shadow-purple-200 hover:shadow-purple-300 hover:-translate-y-1 transition-all flex items-center gap-2"
           >
             <Plus size={20} />
@@ -113,7 +114,7 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
           </p>
         </div>
         <button
-          onClick={onNavigateToPublish}
+          onClick={() => onNavigateToPublish()}
           className="px-6 py-3 bg-white text-indigo-600 border border-indigo-100 rounded-xl font-bold shadow-sm hover:bg-indigo-50 transition-all flex items-center gap-2"
         >
           <Plus size={18} />
@@ -163,6 +164,7 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
                   </td>
                   <td className="p-6 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => onNavigateToPublish(lp.subdomain)} title="Atualizar ZIP" className="w-10 h-10 flex items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50"><RefreshCw size={20} /></button>
                       <button
                         onClick={() => handleDelete(lp.subdomain)}
                         disabled={deleting === lp.subdomain}
@@ -200,6 +202,7 @@ const Overview: React.FC<OverviewProps> = ({ onNavigateToPublish }) => {
                   <span className="font-bold text-slate-800 text-lg">{lp.subdomain}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button onClick={() => onNavigateToPublish(lp.subdomain)} title="Atualizar ZIP" className="w-10 h-10 flex items-center justify-center rounded-lg text-indigo-600 bg-indigo-50"><RefreshCw size={20} /></button>
                   <button
                     onClick={() => handleDelete(lp.subdomain)}
                     disabled={deleting === lp.subdomain}

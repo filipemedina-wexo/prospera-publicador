@@ -66,7 +66,7 @@ async function upsertRegistryEntry(entry) {
     const registry = await readRegistry();
     const index = registry.findIndex(item => item.subdomain === entry.subdomain);
     if (index >= 0) {
-        registry[index] = { ...registry[index], ...entry, updatedAt: Date.now() };
+        registry[index] = { ...registry[index], ...entry, createdAt: registry[index].createdAt, updatedAt: Date.now() };
     } else {
         registry.unshift(entry);
     }
@@ -93,6 +93,7 @@ function getSiteDirectory(subdomain) {
 }
 
 const https = require('https');
+const { randomUUID } = require('crypto');
 
 // Função auxiliar para fazer requisições HTTP (Promisified)
 function httpRequest(url, options, postData) {
@@ -113,6 +114,7 @@ function httpRequest(url, options, postData) {
             });
         });
 
+        req.setTimeout(30000, () => req.destroy(new Error('Tempo esgotado ao acessar o EasyPanel.')));
         req.on('error', (err) => reject(err));
 
         if (postData) {
@@ -127,7 +129,7 @@ async function findDomainId(subdomain) {
     const apiKey = process.env.EASYPANEL_API_KEY;
     const apiUrlBase = process.env.EASYPANEL_API_URL ? process.env.EASYPANEL_API_URL.split('/trpc')[0] : 'https://34eiwn.easypanel.host/api';
 
-    if (!apiKey) return null;
+    if (!apiKey) throw new Error('EASYPANEL_API_KEY não configurada no backend.');
 
     const domainHost = `${subdomain}.useprospera.com.br`;
 
@@ -158,11 +160,11 @@ async function findDomainId(subdomain) {
             const found = domains.find(d => d.host === domainHost);
             return found ? found.id : null;
         }
-        return null;
+        throw new Error('Resposta inválida ao listar domínios do EasyPanel.');
 
     } catch (error) {
         console.error('[EasyPanel] Erro ao listar domínios:', error);
-        return null;
+        throw new Error('Não foi possível consultar os domínios no EasyPanel. Tente novamente.');
     }
 }
 
@@ -303,21 +305,31 @@ app.post('/publish', upload.single('file'), async (req, res) => {
             return res.status(400).json({ success: false, message: 'Envie um arquivo .zip.' });
         }
 
-        const destDir = path.join(SITES_BASE, subdomain);
-
-        // 2. Registra o domínio antes de publicar para não retornar falso sucesso.
-        await ensureDomain(subdomain);
-
-        // 3. Limpeza da pasta de destino (se existir)
-        await fs.emptyDir(destDir);
-
-        // 4. Extração segura do ZIP
-        console.log(`[Publish] Iniciando extração do ZIP para: ${destDir}`);
-        await extractZipSafely(file.path, destDir);
-        if (!await fs.pathExists(path.join(destDir, 'index.html'))) {
-            throw new Error('O ZIP precisa conter um index.html na raiz da Landing Page.');
+        const destDir = getSiteDirectory(subdomain);
+        const stagingDir = path.join(SITES_BASE, `.staging-${randomUUID()}`);
+        const backupDir = path.join(SITES_BASE, `.backup-${randomUUID()}`);
+        let backedUp = false;
+        try {
+            // Valida o novo ZIP antes de alterar a página que está no ar.
+            await extractZipSafely(file.path, stagingDir);
+            if (!await fs.pathExists(path.join(stagingDir, 'index.html'))) {
+                throw new Error('O ZIP precisa conter um index.html na raiz da Landing Page.');
+            }
+            await ensureDomain(subdomain);
+            if (await fs.pathExists(destDir)) {
+                await fs.move(destDir, backupDir);
+                backedUp = true;
+            }
+            try {
+                await fs.move(stagingDir, destDir);
+            } catch (error) {
+                if (backedUp) await fs.move(backupDir, destDir);
+                throw error;
+            }
+            if (backedUp) await fs.remove(backupDir);
+        } finally {
+            await fs.remove(stagingDir);
         }
-        console.log(`[Publish] Extração concluída com sucesso.`);
 
         const now = Date.now();
         await upsertRegistryEntry({
@@ -377,7 +389,7 @@ app.use(async (req, res, next) => {
     const exists = await fs.pathExists(siteDir);
     if (exists) {
         console.log(`[Middleware] Servindo site para subdomínio: ${subdomain} em ${siteDir}`);
-        express.static(siteDir)(req, res, next);
+        express.static(siteDir, { etag: false, lastModified: false, setHeaders: (response) => response.setHeader('Cache-Control', 'no-store') })(req, res, next);
     } else {
         // Se é um subdomínio mas não tem pasta, loga warning (pode ser 404 real ou erro de volume)
         if (!host.includes('localhost') && !host.includes('127.0.0.1')) {

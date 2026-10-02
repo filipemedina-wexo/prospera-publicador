@@ -3,8 +3,8 @@ import { UploadCloud, CheckCircle2, AlertCircle, Loader2, Globe } from 'lucide-r
 import { PublishStatus, PublishResponse } from '../types';
 import { publishLandingPage } from '../services/api';
 
-const PublishForm: React.FC = () => {
-  const [subdomain, setSubdomain] = useState<string>('');
+const PublishForm: React.FC<{ initialSubdomain?: string }> = ({ initialSubdomain = '' }) => {
+  const [subdomain, setSubdomain] = useState<string>(initialSubdomain);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<PublishStatus>(PublishStatus.IDLE);
   const [result, setResult] = useState<PublishResponse | null>(null);
@@ -45,10 +45,10 @@ const PublishForm: React.FC = () => {
       {/* Header Section */}
       <div className="text-center md:text-left space-y-2">
         <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-800 to-slate-900 tracking-tight pb-2">
-          O que vamos publicar hoje?
+          {initialSubdomain ? 'Atualizar Landing Page' : 'O que vamos publicar hoje?'}
         </h1>
         <p className="text-lg text-slate-500 font-medium leading-relaxed max-w-xl">
-          Envie um arquivo ZIP e escolha o subdomínio para colocar sua landing page no ar em segundos.
+          {initialSubdomain ? `Envie o novo ZIP para atualizar https://${initialSubdomain}.useprospera.com.br na mesma URL.` : 'Envie um arquivo ZIP e escolha o subdomínio para colocar sua landing page no ar em segundos.'}
         </p>
       </div>
 
@@ -70,6 +70,7 @@ const PublishForm: React.FC = () => {
                   <Globe size={20} />
                 </div>
                 <input
+                  readOnly={Boolean(initialSubdomain)}
                   id="subdomain"
                   type="text"
                   value={subdomain}
@@ -78,7 +79,7 @@ const PublishForm: React.FC = () => {
                   className="block w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all font-medium text-lg"
                 />
                 <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                   <span className="text-sm text-slate-400 font-semibold bg-slate-100 px-2 py-1 rounded-md">.prosperapages.com.br</span>
+                   <span className="text-sm text-slate-400 font-semibold bg-slate-100 px-2 py-1 rounded-md">.useprospera.com.br</span>
                 </div>
               </div>
             </div>
@@ -128,7 +129,7 @@ const PublishForm: React.FC = () => {
               ) : (
                 <>
                   <UploadCloud size={24} />
-                  <span>Publicar LP</span>
+                  <span>{initialSubdomain ? 'Atualizar ZIP' : 'Publicar LP'}</span>
                 </>
               )}
             </button>

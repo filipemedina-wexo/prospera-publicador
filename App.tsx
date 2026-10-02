@@ -9,6 +9,7 @@ import { isAuthenticated, logout } from './services/auth';
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [currentView, setCurrentView] = useState<ViewState>('overview'); // Default to overview after login
+  const [editingSubdomain, setEditingSubdomain] = useState('');
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
@@ -30,7 +31,7 @@ const App: React.FC = () => {
 
   // Prevent flash of login screen while checking local storage
   if (isAuthChecking) {
-    return null; 
+    return null;
   }
 
   if (!isLoggedIn) {
@@ -39,11 +40,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 text-slate-800 font-sans selection:bg-purple-200 selection:text-purple-900">
-      
+
       {/* Sidebar Navigation */}
-      <Sidebar 
-        currentView={currentView} 
-        onNavigate={setCurrentView} 
+      <Sidebar
+        currentView={currentView}
+        onNavigate={(view) => { setEditingSubdomain(''); setCurrentView(view); }}
         onLogout={handleLogout}
       />
 
@@ -51,18 +52,18 @@ const App: React.FC = () => {
       <main className="md:ml-64 min-h-screen p-6 md:p-12 lg:p-16 transition-all duration-300">
         <div className="max-w-5xl mx-auto pt-4 md:pt-8">
           {currentView === 'overview' ? (
-            <Overview onNavigateToPublish={() => setCurrentView('publish')} />
+            <Overview onNavigateToPublish={(subdomain = '') => { setEditingSubdomain(subdomain); setCurrentView('publish'); }} />
           ) : (
-            <PublishForm />
+            <PublishForm key={editingSubdomain} initialSubdomain={editingSubdomain} />
           )}
         </div>
-        
+
         {/* Footer / Copyright */}
         <footer className="mt-20 text-center text-slate-400 text-sm font-medium">
           <p>&copy; {new Date().getFullYear()} Prospera Pages. Todos os direitos reservados.</p>
         </footer>
       </main>
-      
+
     </div>
   );
 };
